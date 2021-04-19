@@ -3,10 +3,9 @@ using CountersPlus.ConfigModels;
 using CountersPlus.UI.ViewControllers;
 using CountersPlus.Utils;
 using HMUI;
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using VRUIControls;
 using Zenject;
 using static CountersPlus.Utils.Accessors;
@@ -56,31 +55,20 @@ namespace CountersPlus.UI.FlowCoordinators
                 // We're actually transitioning to the Tutorial sequence, but disabling the tutorial itself from starting.
                 gameScenesManager.PushScenes(tutorialSceneSetup, 0.25f, null, (_) =>
                 {
-                    // god this makes me want to retire from beat saber modding
-                    static void DisableAllNonImportantObjects(Transform original, Transform source, IEnumerable<string> importantObjects)
-                    {
-                        foreach (Transform child in source)
-                        {
-                            if (importantObjects.Contains(child.name))
-                            {
-                                Transform loopback = child;
-                                while (loopback != original)
-                                {
-                                    loopback.gameObject.SetActive(true);
-                                    loopback = loopback.parent;
-                                }
-                            }
-                            else
-                            {
-                                child.gameObject.SetActive(false);
-                                DisableAllNonImportantObjects(original, child, importantObjects);
-                            }
-                        }
-                    }
+                    // Tutorial scene only has a single root object named "Wrapper" which contains everything.
+                    Transform wrapper = SceneManager.GetSceneByName("Tutorial").GetRootGameObjects()[0].transform;
+                    Transform tutorial = wrapper.Find("TutorialGameplay");
 
+                    // Take out the MenuControllers object so we keep the controllers with menu pointers.
+                    Transform menuControllers = tutorial.transform.Find("TutorialPauseMenu/MenuControllers");
+                    menuControllers.SetParent(wrapper, true);
+                    menuControllers.gameObject.SetActive(true);
 
-                    // Disable the tutorial from actually starting. I dont think there's a better way to do this...
-                    Transform tutorial = GameObject.Find("TutorialGameplay").transform;
+                    // Re-enable the main menu's VRInputModule.
+                    vrInputModule.enabled = true;
+
+                    // Prevent the rest of the tutorial from doing anything.
+                    tutorial.gameObject.SetActive(false);
 
                     if (mainSettings.screenDisplacementEffectsEnabled)
                     {
@@ -90,25 +78,6 @@ namespace CountersPlus.UI.FlowCoordinators
 
                     // Reset menu audio to original state.
                     songPreviewPlayer.CrossfadeToDefault();
-
-                    // When not in FPFC, disable the Menu input, and re-enable the Tutorial menu input
-                    if (!Environment.GetCommandLineArgs().Any(x => x.ToLowerInvariant() == "fpfc") &&
-                        !Resources.FindObjectsOfTypeAll<FirstPersonFlyingController>().Any(x => x.isActiveAndEnabled))
-                    {
-                        vrInputModule.gameObject.SetActive(false);
-
-                        DisableAllNonImportantObjects(tutorial, tutorial, new string[]
-                        {
-                            "EventSystem",
-                            "ControllerLeft",
-                            "ControllerRight"
-                        });
-                    }
-                    else // If we're in FPFC, just disable everything as usual.
-                    {
-                        DisableAllNonImportantObjects(tutorial, tutorial, Array.Empty<string>());
-                        vrInputModule.enabled = true;
-                    }
                 });
             }
 
